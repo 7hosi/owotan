@@ -32,6 +32,13 @@ const ID_SCALE = 2 ** 40;
 const MOUNT_DIRECTORY = '/dictionaries';
 
 /**
+ * How long after dictionaries fail to load they are tried again, in milliseconds, at first and at most. The wait
+ * doubles after each failure, so a dictionary that can't be read isn't read again for every query.
+ */
+const MOUNT_RETRY_DELAY_MIN = 1000;
+const MOUNT_RETRY_DELAY_MAX = 60000;
+
+/**
  * Answers the dictionary database's requests from hoshidicts dictionaries kept in a `DictionaryStorage`.
  * Dictionaries are mounted on the first query, so a context that only imports never opens them.
  */
@@ -54,6 +61,10 @@ export class DictionaryDatabaseEngine {
         this._prepared = false;
         /** @type {boolean} */
         this._mountStale = true;
+        /** @type {number} How long to wait before dictionaries that failed to load are tried again, 0 if none did. */
+        this._mountRetryDelay = 0;
+        /** @type {number} When dictionaries that failed to load are tried again, from `Date.now()`. */
+        this._mountRetryTime = 0;
         /** @type {Promise<void>} Serializes changes to the dictionary set. */
         this._queue = Promise.resolve();
         /** @type {?Promise<Uint8Array>} */
@@ -509,17 +520,24 @@ export class DictionaryDatabaseEngine {
      */
     async _getHoshidicts() {
         await this._ensurePrepared();
-        if (this._mountStale || this._hoshidicts === null) {
+        if (this._needsMount()) {
             await this._enqueue(() => this._mountDictionaries());
         }
         return /** @type {Hoshidicts} */ (this._hoshidicts);
     }
 
     /**
+     * @returns {boolean}
+     */
+    _needsMount() {
+        return this._mountStale || this._hoshidicts === null || (this._mountRetryDelay > 0 && Date.now() >= this._mountRetryTime);
+    }
+
+    /**
      * Mounts the dictionaries that are not and unmounts those that were removed. Must run in the queue.
      */
     async _mountDictionaries() {
-        if (!this._mountStale && this._hoshidicts !== null) { return; }
+        if (!this._needsMount()) { return; }
         if (this._hoshidicts === null) {
             this._hoshidicts = await Hoshidicts.create(isCrossOriginIsolated() ? 0 : null);
             this._hoshidicts.fs.mkdir(MOUNT_DIRECTORY);
@@ -537,11 +555,12 @@ export class DictionaryDatabaseEngine {
         try {
             dictionaryMounts = await this._storage.mount(hoshidicts, dictionaries);
         } catch (e) {
-            // Tried again the next time they are needed
             log.error(new Error(`Could not load the dictionaries: ${e instanceof Error ? e.message : `${e}`}`));
+            this._setMountFailed(true);
             return;
         }
         const {mounts, release} = dictionaryMounts;
+        let failed = false;
         try {
             for (let i = 0; i < dictionaries.length; ++i) {
                 const {id, record, path} = dictionaries[i];
@@ -553,12 +572,25 @@ export class DictionaryDatabaseEngine {
                     }
                 } catch (e) {
                     log.error(new Error(`Could not load dictionary ${record.summary.title}: ${e instanceof Error ? e.message : `${e}`}`));
+                    // Tried again later: in Safari, the files of a dictionary that another context has just imported
+                    // can't be read for a short while ("NotFoundError"), and before, it stayed out until a restart.
+                    this._unmount(id);
+                    failed = true;
                 }
             }
         } finally {
             release();
         }
+        this._setMountFailed(failed);
+    }
+
+    /**
+     * @param {boolean} failed Whether any dictionary failed to load, to be tried again later.
+     */
+    _setMountFailed(failed) {
         this._mountStale = false;
+        this._mountRetryDelay = failed ? Math.min(Math.max(this._mountRetryDelay * 2, MOUNT_RETRY_DELAY_MIN), MOUNT_RETRY_DELAY_MAX) : 0;
+        this._mountRetryTime = Date.now() + this._mountRetryDelay;
     }
 
     /**

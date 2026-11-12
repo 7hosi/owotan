@@ -65,6 +65,9 @@ Along the way it also fixes some performance and layout problems.
     each copy showed its own popup over the other, so a popup that hides when the cursor leaves it needed two exits.
   - `commands.getAll` from a popup crashes the page, so it is read through the backend.
   - Safari has no usable SharedWorker, so images are drawn through the backend.
+  - A dictionary that fails to load is tried again a second later, then after waits that double up to a minute.
+    Right after an import, Safari can't read the new dictionary's files from the background page for a short while,
+    and lookups left it out until Safari was restarted.
   - Clicking a dictionary image opens its tab during the click and shows the image in it once it's read. Safari blocks
     a tab opened afterwards, so the click did nothing.
   - Missing CSS is worked around:
