@@ -371,9 +371,14 @@ export class Frontend {
     /**
      * Lets the popup play audio, such as audio played automatically for a lookup, since the event is a gesture. The
      * popup of the first lookup can be created after the gesture, such as after the scanning modifier is pressed.
+     * Only audio played automatically needs it, as the popup's audio buttons are gestures in the popup, so without it
+     * a gesture doesn't load the popup.
      */
     _onGesture() {
         if (!this._textScanner.isEnabled()) { return; } // Nothing is looked up, so the popup is not loaded either
+        if (this._options === null) { return; }
+        const {enabled, autoPlay} = this._options.audio;
+        if (!(enabled && autoPlay)) { return; }
         this._unlockAudioWhenLoaded(() => this._popup !== null && this._popup.unlockAudio());
     }
 

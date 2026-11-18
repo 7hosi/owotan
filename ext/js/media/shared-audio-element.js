@@ -45,6 +45,9 @@ export class SharedAudioElement {
             return;
         }
         this._current = null;
+        // Muted, so that iOS doesn't give Safari the audio session, which stops audio playing in other apps, such as
+        // music. A muted element is unlocked too.
+        element.muted = true;
         element.src = SILENT_AUDIO_URL;
         element.play().then(
             () => { this._unlocked = true; },
@@ -70,6 +73,7 @@ export class SharedAudioElement {
         element.src = audio.url;
         element.currentTime = audio.currentTime;
         element.volume = audio.volume;
+        element.muted = false;
         return element.play();
     }
 
