@@ -19,6 +19,33 @@
 import {Handlebars} from '../../lib/handlebars.js';
 import {ExtensionError} from '../core/extension-error.js';
 
+/**
+ * Makes Handlebars' lexer try each of its rules only where the rest of the template starts. The rules start with `^`,
+ * which a regex compiled by the JIT only checks there, but Safari runs http:// pages, and the popups in them, in a
+ * process without a JIT, whose regex interpreter tried every position of the rest of the template for each rule and
+ * token. Parsing a 33 KB template took 16 s instead of 14 ms there, and the page froze while a popup prepared its
+ * Anki notes. A sticky regex is only tried at its `lastIndex`.
+ */
+function makeLexerRulesSticky() {
+    // Handlebars is a custom version of the library without type information, so it's assumed to be "any".
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const rules = /** @type {(RegExp|object)[]} */ (Handlebars.Parser.lexer.rules);
+    for (let i = 0; i < rules.length; ++i) {
+        const rule = rules[i];
+        if (!(rule instanceof RegExp)) { continue; }
+        const sticky = new RegExp(rule.source, `${rule.flags}y`);
+        // The lexer calls `input.match(rule)`, which calls this
+        rules[i] = {
+            [Symbol.match]: (text) => {
+                sticky.lastIndex = 0;
+                return sticky.exec(text);
+            },
+        };
+    }
+}
+
+makeLexerRulesSticky();
+
 export class TemplateRenderer {
     constructor() {
         /** @type {Map<string, import('handlebars').TemplateDelegate<import('anki-templates').NoteData>>} */
