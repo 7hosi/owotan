@@ -142,6 +142,7 @@
                 "background.html",
                 "lib/hoshidicts.js",
                 "lib/hoshidicts.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]
@@ -174,6 +175,7 @@
                 "background.html",
                 "lib/hoshidicts.js",
                 "lib/hoshidicts.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]
@@ -204,6 +206,7 @@
                 "background.html",
                 "lib/hoshidicts.js",
                 "lib/hoshidicts.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]
@@ -314,6 +317,7 @@
                 "js/background/offscreen-main.js",
                 "lib/hoshidicts-threads.js",
                 "lib/hoshidicts-threads.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]
@@ -367,6 +371,7 @@
                 "js/background/offscreen-main.js",
                 "lib/hoshidicts-threads.js",
                 "lib/hoshidicts-threads.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]
@@ -381,6 +386,9 @@
             "inherit": "firefox",
             "fileName": "yomitan-safari",
             "viewport": "width=device-width,initial-scale=1,maximum-scale=1",
+            "bundledContentScripts": [
+                "js/app/content-script-safari.js"
+            ],
             "modifications": [
                 {
                     "action": "delete",
@@ -440,6 +448,17 @@
                     "path": [
                         "content_scripts",
                         0,
+                        "js"
+                    ],
+                    "value": [
+                        "js/app/content-script-safari.js"
+                    ]
+                },
+                {
+                    "action": "set",
+                    "path": [
+                        "content_scripts",
+                        0,
                         "css"
                     ],
                     "value": [
@@ -471,7 +490,8 @@
                 "lib/hoshidicts-threads.js",
                 "lib/hoshidicts-threads.wasm",
                 "js/comm/shared-worker-bridge.js",
-                "js/display/media-drawing-worker.js"
+                "js/display/media-drawing-worker.js",
+                "js/app/content-script-wrapper.js"
             ]
         },
         {
@@ -482,6 +502,7 @@
                 "background.html",
                 "lib/hoshidicts.js",
                 "lib/hoshidicts.wasm",
+                "js/app/content-script-safari.js",
                 "css/safari-page.css",
                 "safari-priority.html"
             ]

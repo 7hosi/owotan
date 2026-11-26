@@ -63,6 +63,9 @@ Along the way it also fixes some performance and layout problems.
   - Safari runs the content scripts again in the open pages when the extension loads, as when it reloads, and the
     copies that were already running keep working. A new copy now stops when a working one is in the page. Before,
     each copy showed its own popup over the other, so a popup that hides when the cursor leaves it needed two exits.
+  - Safari's content blockers treat the modules that a content script imports from the extension as scripts of
+    another site, so an ad blocker's rule that blocks such scripts in a page, as on some sites, kept the popup from
+    working there. The build bundles Safari's content script with its modules into one script, which loads nothing.
   - `commands.getAll` from a popup crashes the page, so it is read through the backend.
   - Safari has no usable SharedWorker, so images are drawn through the backend.
   - A dictionary that fails to load is tried again a second later, then after waits that double up to a minute.

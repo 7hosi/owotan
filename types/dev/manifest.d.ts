@@ -40,6 +40,11 @@ export type ManifestVariant = {
     excludeFiles?: string[];
     /** The content of each page's viewport meta tag. Only builds into a directory use it. */
     viewport?: string;
+    /**
+     * Modules that are bundled with the modules they import into one script each, at the same path, for a browser that
+     * runs them as content scripts. Only builds into a directory use it.
+     */
+    bundledContentScripts?: string[];
     modifications?: Modification[];
 };
 

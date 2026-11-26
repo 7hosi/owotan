@@ -18,6 +18,7 @@
 
 import assert from 'assert';
 import childProcess from 'child_process';
+import esbuild from 'esbuild';
 import fs from 'fs';
 import JSZip from 'jszip';
 import {fileURLToPath} from 'node:url';
@@ -212,6 +213,11 @@ async function build(buildDir, extDir, manifestUtil, variantNames, manifestPath,
                     if (typeof variant.viewport === 'string') {
                         setViewport(fullFileName, variant.viewport);
                     }
+                    if (Array.isArray(variant.bundledContentScripts)) {
+                        for (const file of variant.bundledContentScripts) {
+                            await bundleContentScript(extDir, fullFileName, file);
+                        }
+                    }
                 }
             }
         }
@@ -232,6 +238,40 @@ function setViewport(directory, content) {
         const source = fs.readFileSync(filePath, {encoding: 'utf8'});
         fs.writeFileSync(filePath, source.replace(/<meta name="viewport" content="[^"]*">/, `<meta name="viewport" content="${content}">`));
     }
+}
+
+/**
+ * Bundles a module and the modules it imports into one script, which a browser can run as a content script without
+ * loading any of them, in place of the module in a build directory.
+ * @param {string} extDir
+ * @param {string} directory
+ * @param {string} file The module's path in the extension.
+ */
+async function bundleContentScript(extDir, directory, file) {
+    /** @type {import('esbuild').Plugin} */
+    const importMetaUrlPlugin = {
+        name: 'import-meta-url',
+        setup(pluginBuild) {
+            // A bundled module has no URL of its own, so it gets the URL that the module has in the extension
+            pluginBuild.onLoad({filter: /\.js$/}, ({path: modulePath}) => {
+                const moduleUrlPath = path.relative(extDir, modulePath).split(path.sep).join('/');
+                const source = fs.readFileSync(modulePath, {encoding: 'utf8'});
+                return {contents: source.replaceAll('import.meta.url', `chrome.runtime.getURL(${JSON.stringify(moduleUrlPath)})`), loader: 'js'};
+            });
+        },
+    };
+    const result = await esbuild.build({
+        entryPoints: [path.join(extDir, file)],
+        bundle: true,
+        format: 'esm',
+        write: false,
+        plugins: [importMetaUrlPlugin],
+        logLevel: 'warning',
+    });
+    const [{text}] = result.outputFiles;
+    // The bundle is a module only for any top-level await, which a function holds instead
+    assert.ok(!/^(import|export)\b/m.test(text), `${file} is bundled with imports or exports`);
+    fs.writeFileSync(path.join(directory, file), `(async () => {\n${text}})();\n`);
 }
 
 /**
