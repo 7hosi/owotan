@@ -5,9 +5,10 @@ permissions:
 
 on:
   push:
-    branches: [master]
+    branches: [master, safari]
   pull_request:
   merge_group:
+  workflow_dispatch:
 
 jobs:
   tests:
@@ -42,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build-wasm
+        if: matrix.test == 'test:unit'
 
       - name: Run ${{ matrix.name }} tests
         run: npm run ${{ matrix.test }}
@@ -52,12 +55,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build-wasm
 
       - name: Build Legal
         run: npm run license-report:html
 
-      - name: Build
-        run: npm run build
+      - name: Build Chrome
+        run: npm run build -- chrome chrome-dev
 
       - name: Validate manifest.json of the extension
         uses: cardinalby/schema-validator-action@2166123eb256fa40baef7e22ab1379708425efc7 # v3.1.1
@@ -66,10 +70,19 @@ jobs:
           schema: ./dev/data/chrome-manifest-schema.json
           fixSchemas: true
 
+      - name: Upload Chrome builds
+        uses: actions/upload-artifact@v7
+        with:
+          name: chrome-builds
+          path: |
+            builds/yomitan-chrome.zip
+            builds/yomitan-chrome-dev.zip
+          if-no-files-found: error
+
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
-    if: github.event_name != 'merge_group'
+    if: github.repository == 'yomidevs/yomitan' && github.event_name != 'merge_group'
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup

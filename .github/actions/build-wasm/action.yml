@@ -1,0 +1,50 @@
+name: Build WASM libraries
+description: Build hoshidicts and MeCab WebAssembly libraries with Emscripten
+inputs:
+  cache:
+    description: "Whether to cache the compiled WebAssembly libraries and Emscripten SDK"
+    required: false
+    default: "true"
+runs:
+  using: "composite"
+  steps:
+    - name: Restore compiled WASM libraries
+      id: cache-wasm
+      if: inputs.cache == 'true'
+      uses: actions/cache@v5
+      with:
+        path: |
+          ext/lib/hoshidicts.js
+          ext/lib/hoshidicts.wasm
+          ext/lib/hoshidicts-threads.js
+          ext/lib/hoshidicts-threads.wasm
+          ext/lib/mecab.js
+          ext/lib/mecab.wasm
+        key: wasm-${{ runner.os }}-${{ hashFiles('dev/bin/build-hoshidicts.js', 'dev/bin/build-mecab.js', 'dev/emscripten-build.js', 'dev/hoshidicts/**', 'dev/mecab/**') }}
+
+    - name: Install Ninja
+      if: inputs.cache != 'true' || steps.cache-wasm.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+        fi
+
+    - name: Setup Emscripten SDK
+      if: inputs.cache != 'true' || steps.cache-wasm.outputs.cache-hit != 'true'
+      uses: emscripten-core/setup-emsdk@v16
+      with:
+        version: "latest"
+        no-cache: ${{ inputs.cache != 'true' }}
+        actions-cache-folder: ${{ inputs.cache == 'true' && 'emsdk-cache' || '' }}
+
+    - name: Build hoshidicts
+      if: inputs.cache != 'true' || steps.cache-wasm.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm run build:hoshidicts
+
+    - name: Build MeCab
+      if: inputs.cache != 'true' || steps.cache-wasm.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm run build:mecab
