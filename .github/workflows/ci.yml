@@ -43,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build-wasm
+        if: matrix.test == 'test:unit'
 
       - name: Run ${{ matrix.name }} tests
         run: npm run ${{ matrix.test }}
