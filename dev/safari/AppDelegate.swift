@@ -46,6 +46,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if NSApp.isHidden {
             servesOnly = true
             NSApp.setActivationPolicy(.accessory)
+            // macOS can still unhide the app, as when switching to or from a full screen space, which would show
+            // its window over the space. Put away, the window only comes back when the user opens the app.
+            mainWindow?.orderOut(nil)
             apiServer.start()
         }
     }
@@ -56,9 +59,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             servesOnly = false
             NSApp.setActivationPolicy(.regular)
             NSApp.unhide(nil)
+            mainWindow?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
         return true
+    }
+
+    /// The window that the app shows when it starts, from the storyboard.
+    private var mainWindow: NSWindow? {
+        NSApp.windows.first { $0.contentViewController is ViewController }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
