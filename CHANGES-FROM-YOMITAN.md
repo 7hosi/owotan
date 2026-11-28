@@ -98,7 +98,9 @@ Along the way it also fixes some performance and layout problems.
   priority: only on the efficiency cores, with its disk reads throttled. Lookups took 1–6 s, and up to 15 s after
   Safari launched or while the Mac was busy. When the background page starts, the extension opens a page of its own
   in a tab that isn't selected and reloads itself. Safari then runs the new background page in that page's process,
-  at a normal priority, and the tab closes after about a second. Lookups take about 100 ms.
+  at a normal priority, and the tab closes after about a second. Lookups take about 100 ms. The tab's address also
+  records the reload, since Safari's WebDriver sessions, as its MCP server's, lose the extension's storage as it
+  reloads, and the extension then reloaded and opened tabs over and over.
 - **Keeping the background page loaded.** Safari unloads the background page 30 s after the last message to it,
   and pages' heartbeats don't always reach it in time, as Safari delays the timers of pages that aren't shown. It was
   unloaded every few minutes while Safari was in the background, and the next lookup waited for it to load again; on

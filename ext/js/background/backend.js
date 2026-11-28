@@ -593,23 +593,37 @@ export class Backend {
      * page in a tab that isn't selected and reloads the extension, and the next background page closes the tab.
      * Pages keep the content scripts through the reload. Safari keeps the background page loaded while pages send
      * heartbeats, so this is mostly done once when Safari launches.
+     * The time of the reload is saved in the tab's URL as well as in the storage. Safari keeps the storage only in
+     * memory for the windows of a WebDriver session, as those that its MCP server opens, and loses it as the extension
+     * reloads, so each background page took itself to be the first and reloaded again, opening a tab each time.
      * @returns {Promise<boolean>} Whether the extension reloads.
      */
     async _reloadInExtensionPageProcess() {
         const url = chrome.runtime.getURL('/safari-priority.html');
-        const getTabs = async () => (await this._getAllTabs()).filter((tab) => tab.url === url);
+        /**
+         * @param {number} time
+         * @returns {boolean}
+         */
+        const isReloadTime = (time) => Math.abs(Date.now() - time) < SAFARI_PRIORITY_RELOAD_DURATION;
+        const tabs = (await this._getAllTabs()).filter((tab) => typeof tab.url === 'string' && tab.url.split('#')[0] === url);
         const {safariPriorityReloadTime} = await chrome.storage.local.get(['safariPriorityReloadTime']);
-        if (typeof safariPriorityReloadTime === 'number' && Math.abs(Date.now() - safariPriorityReloadTime) < SAFARI_PRIORITY_RELOAD_DURATION) {
+        if (
+            (typeof safariPriorityReloadTime === 'number' && isReloadTime(safariPriorityReloadTime)) ||
+            tabs.some((tab) => isReloadTime(Number(new URL(/** @type {string} */ (tab.url)).hash.slice(1))))
+        ) {
             await chrome.storage.local.remove(['safariPriorityReloadTime']);
-            const tabIds = (await getTabs()).map(({id}) => id).filter((id) => typeof id === 'number');
+            const tabIds = tabs.map(({id}) => id).filter((id) => typeof id === 'number');
             if (tabIds.length > 0) {
                 await chrome.tabs.remove(tabIds);
             }
             return false;
         }
 
-        // Safari can restore a tab of it from when it quit
-        if ((await getTabs()).length === 0) {
+        // Safari can restore a tab of it from when it quit, whose page changes only its fragment
+        const restoredTabId = tabs.map(({id}) => id).find((id) => typeof id === 'number');
+        if (typeof restoredTabId === 'number') {
+            await chrome.tabs.update(restoredTabId, {url: `${url}#${Date.now()}`});
+        } else {
             if ((await this._getAllTabs()).length === 0) {
                 // Opening a tab without a window would open a window
                 await new Promise((resolve) => {
@@ -621,7 +635,7 @@ export class Backend {
                     chrome.tabs.onCreated.addListener(onCreated);
                 });
             }
-            const {id} = await chrome.tabs.create({url, active: false});
+            const {id} = await chrome.tabs.create({url: `${url}#${Date.now()}`, active: false});
             if (typeof id === 'number') {
                 await Promise.race([this._waitForTabLoad(id), promiseTimeout(SAFARI_PRIORITY_TAB_LOAD_TIMEOUT)]);
             }
@@ -3494,6 +3508,10 @@ export class Backend {
             if (welcomePageOpened === true) { return; }
             await chrome.storage.local.set({welcomePageOpened: true});
             if (typeof options === 'undefined') {
+                // Safari loses the storage as the extension reloads in the windows of a WebDriver session (see
+                // _reloadInExtensionPageProcess), so the next background page opened it again
+                const url = chrome.runtime.getURL('/welcome.html');
+                if ((await this._getAllTabs()).some((tab) => tab.url === url)) { return; }
                 await this._openWelcomeGuidePage();
             }
         } catch (e) {
