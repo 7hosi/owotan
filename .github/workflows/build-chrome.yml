@@ -1,0 +1,74 @@
+name: Build Chrome Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Upstream AuroraWright/owotan tag or branch to build (e.g. 20261109.8)"
+        required: true
+        default: "20261109.8"
+      release_tag:
+        description: "Tag name for the 7hosi/owotan GitHub release"
+        required: true
+        default: "20261109.8"
+      manifest_version:
+        description: "Chrome manifest version (1-4 dot-separated ints <= 65535, e.g. 2026.1109.8)"
+        required: true
+        default: "2026.1109.8"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build hoshidicts WASM
+        run: npm run build:hoshidicts
+
+      - name: Build MeCab WASM
+        run: npm run build:mecab
+
+      - name: Build legal report
+        run: npm run license-report:html
+
+      - name: Build Chrome extension
+        run: npm run build -- --target chrome --version "${{ inputs.manifest_version }}"
+
+      - name: Package release asset
+        run: |
+          cp builds/yomitan-chrome.zip builds/owotan-chrome.zip
+          sha256sum builds/owotan-chrome.zip
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "${{ inputs.release_tag }}" --yes || true
+          gh release create "${{ inputs.release_tag }}" \
+            builds/owotan-chrome.zip \
+            --target "${{ github.sha }}" \
+            --title "OwOtan ${{ inputs.release_tag }} (Chrome build)" \
+            --notes "Unmodified Chrome build of AuroraWright/owotan (${{ inputs.ref }}, manifest version ${{ inputs.manifest_version }}) for Kimochi."
